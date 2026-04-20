@@ -15,6 +15,11 @@ app (same way games announce "Playing X").
 
 You need Python 3.9+ and the Discord desktop app open.
 
+Tested on Windows. The core script should work on macOS and Linux too —
+the Python is all cross-platform and `pypresence` speaks Discord IPC on
+every OS — but I haven't run it on those myself. If something breaks on
+Mac or Linux, open an issue.
+
 ### 1. Clone and install
 
 ```
