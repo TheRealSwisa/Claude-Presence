@@ -1,0 +1,15 @@
+.env
+.claude/
+data/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
+*.log
+claude-presence.exe
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
