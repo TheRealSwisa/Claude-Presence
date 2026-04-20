@@ -6,11 +6,7 @@
 My first open-source project. It puts a silly coding vibe, your total
 commits, and your Claude Code token usage on your Discord profile.
 
-```
-Coding · channeling the flow state
-386 commits · 34M tokens
-00:42 elapsed
-```
+![preview](preview.png)
 
 Everything runs locally. Nothing gets sent anywhere except your own Discord
 app (same way games announce "Playing X").
