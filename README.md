@@ -1,5 +1,8 @@
 # claude-presence
 
+![lint](https://github.com/TheRealSwisa/Claude-Presence/actions/workflows/lint.yml/badge.svg)
+![license](https://img.shields.io/badge/license-MIT-blue.svg)
+
 My first open-source project. It puts a silly coding vibe, your total
 commits, and your Claude Code token usage on your Discord profile.
 
