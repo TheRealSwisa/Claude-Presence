@@ -158,10 +158,8 @@ running processes or your code to guess. The vibes are flavor, not facts.
 - Re-run `python vibe.py` or restart `run.bat`.
 - Check `data/error.log` for the last crash.
 
-**Can I ship a fork with the Claude logo?**
-For personal use on your own profile, do what you want. Don't publish a
-fork with logos or names you don't own.
 
 ## License
 
 MIT. See `LICENSE`.
+
