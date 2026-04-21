@@ -46,11 +46,11 @@ _vibe_cache = {"vibe": None, "pool": None, "until": 0}
 
 
 def log_error(where):
-    # pythonw has no console, so crashes would vanish silently.
+    # no console in pythonw, log crashes to file
     try:
         ERROR_LOG.parent.mkdir(exist_ok=True)
         with ERROR_LOG.open("a", encoding="utf-8") as f:
-            f.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} {where} ---\n")
+            f.write(f"\n{time.strftime('%Y-%m-%d %H:%M:%S')} [{where}]\n")
             f.write(traceback.format_exc())
     except OSError:
         pass
@@ -63,8 +63,6 @@ def connect():
 
 
 def rotate_if_due(now):
-    # Pool rotates on its own clock, independent of verb transitions, so that
-    # flipping Chatting<->Coding doesn't keep resetting the hold timer.
     if now < _vibe_cache["until"] and _vibe_cache["vibe"]:
         return
     choices = [p for p in ROTATING_POOLS if p != _vibe_cache["pool"]]
@@ -78,7 +76,7 @@ def tick(rpc, started, last):
     now = time.time()
     gap = now - last_activity()
 
-    # go idle if no recent file writes, regardless of what processes are running
+    # no recent file activity = not using claude
     if gap > IDLE_AFTER or not claude_active():
         if last != "idle":
             rpc.clear()

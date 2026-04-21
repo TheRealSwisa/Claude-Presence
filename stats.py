@@ -23,8 +23,6 @@ _repos = None
 
 
 def find_repos(root):
-    # walk the tree looking for .git folders. bails on symlinks, depth,
-    # count, or wall time to stay cheap.
     root = Path(root).expanduser()
     if not root.exists():
         return []
@@ -160,7 +158,6 @@ def claude_usage_totals(root=CLAUDE_DIR):
 
 
 def format_compact(n):
-    # roll over .5 early so 999_999 shows "1.0M" instead of "1000k"
     if n >= 999_500_000:
         return f"{n / 1e9:.1f}B"
     if n >= 999_500:
@@ -171,11 +168,6 @@ def format_compact(n):
         return f"{v:.0f}k" if v >= 10 else f"{v:.1f}k"
     return str(int(n))
 
-
-# ---- windows window-state detection ----------------------------------------
-# used to tell if claude is actually up on screen (desktop window visible, or
-# a terminal hosting the claude-code cli is visible). on non-windows we just
-# assume yes.
 
 if os.name == "nt":
     import ctypes
@@ -296,13 +288,11 @@ def claude_active():
     if not visible:
         return False
 
-    # claude desktop window up?
     for pid in visible:
         p = _image_path(pid).lower()
         if p.endswith("\\claude.exe") and "windowsapps" in p:
             return True
 
-    # claude-code cli inside a visible terminal?
     tree = _proc_tree()
     for pid, (_parent, name) in tree.items():
         if name != "claude.exe":

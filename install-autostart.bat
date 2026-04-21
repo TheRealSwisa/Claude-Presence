@@ -1,9 +1,4 @@
 @echo off
-REM Drops a shortcut to run.bat into your Windows Startup folder so the
-REM presence daemon launches silently when you log in.
-REM
-REM To undo: delete the shortcut from shell:startup (Win+R -> shell:startup).
-
 set TARGET=%~dp0run.bat
 set STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 set LINK=%STARTUP%\claude-presence.lnk
@@ -16,9 +11,8 @@ powershell -NoProfile -Command ^
   "$s.Save()"
 
 if exist "%LINK%" (
-    echo installed: %LINK%
-    echo claude-presence will now start when you log in.
+    echo installed. starts on login now.
 ) else (
-    echo failed to create shortcut
+    echo something went wrong
     exit /b 1
 )
