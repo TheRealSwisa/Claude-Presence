@@ -77,10 +77,11 @@ def rotate_if_due(now):
 def tick(rpc, started, last):
     if not claude_active():
         rpc.clear()
-        return "idle"
-    gap = time.time() - last_activity()
-
+        return "idle", None
     now = time.time()
+    if started is None or last == "idle":
+        started = int(now)
+    gap = now - last_activity()
     if gap < 30:
         verb = "Chatting"
         vibe = next_vibe("working") if _vibe_cache.get("last_verb") != "Chatting" else _vibe_cache["vibe"]
@@ -113,7 +114,7 @@ def tick(rpc, started, last):
         except OSError:
             log_error("append_history")
 
-    return verb
+    return verb, started
 
 
 def main():
@@ -125,13 +126,13 @@ def main():
     except (DiscordNotFound, InvalidPipe) as e:
         sys.exit(f"could not reach discord: {e}")
 
-    started = int(time.time())
-    last = ""
+    started = None
+    last = "idle"
     print(f"connected. updating every {TICK}s. ctrl-c to stop.")
 
     while True:
         try:
-            last = tick(rpc, started, last)
+            last, started = tick(rpc, started, last)
             time.sleep(TICK)
         except KeyboardInterrupt:
             print()
