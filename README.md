@@ -15,10 +15,9 @@ app (same way games announce "Playing X").
 
 You need Python 3.9+ and the Discord desktop app open.
 
-Tested on Windows. The core script should work on macOS and Linux too —
-the Python is all cross-platform and `pypresence` speaks Discord IPC on
-every OS — but I haven't run it on those myself. If something breaks on
-Mac or Linux, open an issue.
+Tested on Windows. Should work on Mac/Linux too since the Python is
+cross-platform and `pypresence` speaks Discord IPC on every OS, but I
+haven't tried it there. If it breaks, open an issue.
 
 ### 1. Clone and install
 
@@ -33,7 +32,7 @@ cp .env.example .env
 
 1. Go to https://discord.com/developers/applications and click **New
    Application**. Name it whatever you want shown on your profile (no
-   spaces — something like `ClaudeCode` or your initials).
+   spaces, something like `ClaudeCode` or your initials).
 2. Copy the **Application ID** into `.env` as `DISCORD_CLIENT_ID`.
 3. Click **Rich Presence → Art Assets → Add Image(s)**. Upload any square
    PNG, name its key `logo`. That shows up as the big icon next to your
@@ -95,13 +94,13 @@ python /path/to/Claude-Presence/vibe.py &
 
 Being upfront about this since it scans your files:
 
-- **Claude transcripts** (`~/.claude/projects/**/*.jsonl`) — reads the
-  `usage` field to sum input + output tokens and count messages. Never
-  reads the actual text of your conversations.
-- **`.git` folders under your home dir** — runs `git rev-list --count HEAD`
+- **Claude transcripts** (`~/.claude/projects/**/*.jsonl`): reads the
+  `usage` field to sum input + output tokens and count messages. Doesn't
+  read the actual text of your conversations.
+- **`.git` folders under your home dir**: runs `git rev-list --count HEAD`
   in each to sum your total commits. No diffs, no code, just the count.
-- **Discord local IPC** — sends the vibe string, commit count, token count,
-  and your image key. Nothing else.
+- **Discord local IPC**: sends the vibe string, commit count, token count,
+  and your image key. That's it.
 
 The repo scanner is capped: depth 6, 200 repos max, 10-second timeout, no
 symlinks, skips `node_modules`, `.venv`, `AppData`, `Windows`, etc.
@@ -115,9 +114,9 @@ Everything in `.env`:
 
 | Var | Default | What it does |
 |---|---|---|
-| `DISCORD_CLIENT_ID` | — | required, from the Discord dev portal |
+| `DISCORD_CLIENT_ID` | - | required, from the Discord dev portal |
 | `REPO_ROOT` | `~` | folder to scan for git repos |
-| `REPO_PATHS` | — | comma-separated list of specific repos (overrides `REPO_ROOT`) |
+| `REPO_PATHS` | - | comma-separated list of specific repos (overrides `REPO_ROOT`) |
 | `LARGE_IMAGE_KEY` | `logo` | asset key for the big icon |
 | `UPDATE_INTERVAL` | `15` | seconds between updates (15 is Discord's minimum) |
 | `IDLE_SECONDS` | `300` | hide presence if you haven't touched Claude in this long |
