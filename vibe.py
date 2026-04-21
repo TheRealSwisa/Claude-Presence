@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from pypresence import Presence, PipeClosed, DiscordNotFound, InvalidPipe
 
 from vibes import next_vibe
-from stats import count_total_commits, claude_usage_totals, format_compact, last_activity
+from stats import (count_total_commits, claude_usage_totals, format_compact,
+                   last_activity, claude_active)
 from state import append_history
 
 ROOT = Path(__file__).parent
@@ -29,8 +30,8 @@ def _env_int(key, default, floor):
     except ValueError:
         return default
 
-TICK = _env_int("UPDATE_INTERVAL", 15, 15)
-IDLE_AFTER = _env_int("IDLE_SECONDS", 300, 60)
+TICK = _env_int("UPDATE_INTERVAL", 10, 5)
+IDLE_AFTER = _env_int("IDLE_SECONDS", 20, 5)
 VIBE_ROTATION = _env_int("VIBE_ROTATION", 120, TICK)
 
 POOL_VERBS = {
@@ -74,10 +75,10 @@ def rotate_if_due(now):
 
 
 def tick(rpc, started, last):
-    gap = time.time() - last_activity()
-    if gap > IDLE_AFTER:
+    if not claude_active():
         rpc.clear()
         return "idle"
+    gap = time.time() - last_activity()
 
     now = time.time()
     if gap < 30:

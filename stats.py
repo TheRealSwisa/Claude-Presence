@@ -23,8 +23,8 @@ _repos = None
 
 
 def find_repos(root):
-    # Safety: follows no symlinks, caps depth / count / wall time, skips
-    # common noise and system dirs. Returns [] on any error.
+    # walk the tree looking for .git folders. bails on symlinks, depth,
+    # count, or wall time to stay cheap.
     root = Path(root).expanduser()
     if not root.exists():
         return []
@@ -61,6 +61,7 @@ def _git_count(repo):
         out = subprocess.run(
             ["git", "rev-list", "--count", "HEAD"],
             cwd=str(repo), capture_output=True, text=True, timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return int(out.stdout.strip() or 0)
     except (subprocess.SubprocessError, ValueError, FileNotFoundError):
@@ -68,7 +69,6 @@ def _git_count(repo):
 
 
 def count_total_commits(repos):
-    # repos: list of paths, or a single path string. Returns total across all.
     global _commits, _repos
     now = time.time()
 
@@ -79,7 +79,6 @@ def count_total_commits(repos):
     else:
         paths = []
 
-    # If any input is a root (not itself a repo), expand via find_repos.
     expanded = []
     for p in paths:
         if (p / ".git").is_dir():
@@ -161,8 +160,7 @@ def claude_usage_totals(root=CLAUDE_DIR):
 
 
 def format_compact(n):
-    # boundaries are .5 below the next unit so 999_999 rolls over to "1.0M"
-    # instead of showing "1000k"
+    # roll over .5 early so 999_999 shows "1.0M" instead of "1000k"
     if n >= 999_500_000:
         return f"{n / 1e9:.1f}B"
     if n >= 999_500:
@@ -172,3 +170,151 @@ def format_compact(n):
         v = n / 1000
         return f"{v:.0f}k" if v >= 10 else f"{v:.1f}k"
     return str(int(n))
+
+
+# ---- windows window-state detection ----------------------------------------
+# used to tell if claude is actually up on screen (desktop window visible, or
+# a terminal hosting the claude-code cli is visible). on non-windows we just
+# assume yes.
+
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
+
+    _user32 = ctypes.WinDLL("user32", use_last_error=True)
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    _EnumWindowsProc = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    _user32.EnumWindows.argtypes = [_EnumWindowsProc, wintypes.LPARAM]
+    _user32.EnumWindows.restype = wintypes.BOOL
+    _user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    _user32.IsWindowVisible.restype = wintypes.BOOL
+    _user32.IsIconic.argtypes = [wintypes.HWND]
+    _user32.IsIconic.restype = wintypes.BOOL
+    _user32.GetWindowThreadProcessId.argtypes = [
+        wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    _user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    _kernel32.OpenProcess.argtypes = [
+        wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _kernel32.OpenProcess.restype = wintypes.HANDLE
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _kernel32.QueryFullProcessImageNameW.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD,
+        wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    _kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+
+    _TH32CS_SNAPPROCESS = 0x00000002
+
+    class _PROCESSENTRY32W(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_void_p),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_wchar * 260),
+        ]
+
+    _kernel32.CreateToolhelp32Snapshot.argtypes = [
+        wintypes.DWORD, wintypes.DWORD]
+    _kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _kernel32.Process32FirstW.argtypes = [
+        wintypes.HANDLE, ctypes.POINTER(_PROCESSENTRY32W)]
+    _kernel32.Process32FirstW.restype = wintypes.BOOL
+    _kernel32.Process32NextW.argtypes = [
+        wintypes.HANDLE, ctypes.POINTER(_PROCESSENTRY32W)]
+    _kernel32.Process32NextW.restype = wintypes.BOOL
+
+
+def _image_path(pid):
+    h = _kernel32.OpenProcess(
+        _PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(512)
+        size = wintypes.DWORD(512)
+        if _kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return buf.value
+    finally:
+        _kernel32.CloseHandle(h)
+    return ""
+
+
+def _proc_tree():
+    tree = {}
+    snap = _kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
+    if not snap or snap == wintypes.HANDLE(-1).value:
+        return tree
+    try:
+        entry = _PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(_PROCESSENTRY32W)
+        if _kernel32.Process32FirstW(snap, ctypes.byref(entry)):
+            while True:
+                tree[entry.th32ProcessID] = (
+                    entry.th32ParentProcessID,
+                    entry.szExeFile.lower(),
+                )
+                if not _kernel32.Process32NextW(snap, ctypes.byref(entry)):
+                    break
+    finally:
+        _kernel32.CloseHandle(snap)
+    return tree
+
+
+_TERMINAL_EXES = {
+    "windowsterminal.exe", "conhost.exe", "openconsole.exe",
+    "cmd.exe", "powershell.exe", "pwsh.exe",
+    "wezterm-gui.exe", "wezterm.exe",
+    "alacritty.exe", "mintty.exe", "bash.exe",
+    "tabby.exe", "hyper.exe",
+}
+
+
+def claude_active():
+    if os.name != "nt":
+        return True
+
+    visible = set()
+
+    def cb(hwnd, _lp):
+        if _user32.IsWindowVisible(hwnd) and not _user32.IsIconic(hwnd):
+            pid = wintypes.DWORD()
+            _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value:
+                visible.add(pid.value)
+        return True
+
+    _user32.EnumWindows(_EnumWindowsProc(cb), 0)
+    if not visible:
+        return False
+
+    # claude desktop window up?
+    for pid in visible:
+        p = _image_path(pid).lower()
+        if p.endswith("\\claude.exe") and "windowsapps" in p:
+            return True
+
+    # claude-code cli inside a visible terminal?
+    tree = _proc_tree()
+    for pid, (_parent, name) in tree.items():
+        if name != "claude.exe":
+            continue
+        if "claude-code" not in _image_path(pid).lower():
+            continue
+        cur = tree.get(pid, (0, ""))[0]
+        seen = set()
+        while cur and cur not in seen:
+            seen.add(cur)
+            parent, pname = tree.get(cur, (0, ""))
+            if pname in _TERMINAL_EXES and cur in visible:
+                return True
+            cur = parent
+    return False
