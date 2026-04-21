@@ -31,7 +31,7 @@ def _env_int(key, default, floor):
         return default
 
 TICK = _env_int("UPDATE_INTERVAL", 10, 5)
-IDLE_AFTER = _env_int("IDLE_SECONDS", 20, 5)
+IDLE_AFTER = _env_int("IDLE_SECONDS", 300, 30)
 VIBE_ROTATION = _env_int("VIBE_ROTATION", 120, TICK)
 
 POOL_VERBS = {
@@ -75,13 +75,18 @@ def rotate_if_due(now):
 
 
 def tick(rpc, started, last):
-    if not claude_active():
-        rpc.clear()
-        return "idle", None
     now = time.time()
+    gap = now - last_activity()
+
+    # go idle if no recent file writes, regardless of what processes are running
+    if gap > IDLE_AFTER or not claude_active():
+        if last != "idle":
+            rpc.clear()
+        return "idle", None
+
     if started is None or last == "idle":
         started = int(now)
-    gap = now - last_activity()
+
     if gap < 30:
         verb = "Chatting"
         vibe = next_vibe("working") if _vibe_cache.get("last_verb") != "Chatting" else _vibe_cache["vibe"]

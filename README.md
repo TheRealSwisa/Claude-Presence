@@ -119,7 +119,7 @@ Everything in `.env`:
 | `REPO_PATHS` | - | comma-separated list of specific repos (overrides `REPO_ROOT`) |
 | `LARGE_IMAGE_KEY` | `logo` | asset key for the big icon |
 | `UPDATE_INTERVAL` | `15` | seconds between updates (15 is Discord's minimum) |
-| `IDLE_SECONDS` | `300` | hide presence if you haven't touched Claude in this long |
+| `IDLE_SECONDS` | `300` | clear presence after this many seconds of no Claude activity |
 | `VIBE_ROTATION` | `120` | base seconds per vibe (actual hold is randomized 0.5x-2x) |
 
 ## Adding your own vibes
