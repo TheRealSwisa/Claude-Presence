@@ -66,21 +66,14 @@ On macOS / Linux just do `python vibe.py` to start, Ctrl-C to stop.
 
 ### Run at login (Windows)
 
-First make it silent (no black console window on startup):
-
-```
-copy C:\path\to\Python\pythonw.exe .\claude-presence.exe
-```
-
-Then run this once:
-
 ```
 install-autostart.bat
 ```
 
-That drops a shortcut into your Startup folder. Next time you log in,
-the daemon launches on its own. To undo, delete
-`shell:startup\claude-presence.lnk` (Win+R → `shell:startup`).
+That drops a shortcut into your Startup folder pointing at `pythonw.exe`,
+so there's no console window. Next time you log in, the daemon launches
+on its own. To undo, delete `shell:startup\claude-presence.lnk` (Win+R →
+`shell:startup`).
 
 ### Run at login (macOS / Linux)
 
@@ -137,7 +130,7 @@ stats.py                commit counter + transcript parser
 state.py                history log
 run.bat                 Windows launcher
 stop.bat                kills the daemon
-install-autostart.bat   registers run.bat in your Windows Startup folder
+install-autostart.bat   adds a Startup shortcut so it runs at login
 data/                   local history + error log (gitignored)
 ```
 
