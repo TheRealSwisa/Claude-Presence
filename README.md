@@ -134,6 +134,45 @@ install-autostart.bat   adds a Startup shortcut so it runs at login
 data/                   local history + error log (gitignored)
 ```
 
+## Troubleshooting
+
+**`pip install` fails on Windows.** Try `py -m pip install -r requirements.txt`.
+
+**"missing DISCORD_CLIENT_ID in .env".** Step 2 of setup got skipped. Grab
+the Application ID from the Discord developer portal and paste it into
+`.env`.
+
+**Autostart shortcut isn't firing.** Open `shell:startup` (Win+R →
+`shell:startup`) and confirm `claude-presence.lnk` is there. If Discord
+wasn't open at login the daemon waits 60 seconds and gives up - just
+launch `run.bat` once Discord is running.
+
+**Daemon's running but Discord shows nothing.** Fully quit Discord from
+the system tray (not the X), reopen it, then restart the daemon. Discord
+caches per-app presence and sometimes it sticks.
+
+**Crashes.** Check `data/error.log`. Capped at 256KB so it won't grow
+forever.
+
+## Uninstall
+
+Windows:
+
+```
+stop.bat
+del "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\claude-presence.lnk"
+```
+
+Then if you want it gone fully:
+
+```
+rmdir /s /q data
+pip uninstall pypresence python-dotenv
+```
+
+Mac/Linux: kill the `python vibe.py` process, remove whatever you added
+to your shell rc or systemd unit, and `rm -rf data`.
+
 ## FAQ
 
 **Does this send anything to Anthropic or Discord or anywhere?**
