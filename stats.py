@@ -6,6 +6,9 @@ from pathlib import Path
 
 CLAUDE_DIR = Path.home() / ".claude" / "projects"
 TTL = 30
+COMMIT_TTL = 300
+ACTIVITY_TTL = 10
+ACTIVE_TTL = 30
 SCAN_TTL = 300
 SCAN_MAX_DEPTH = 6
 SCAN_MAX_REPOS = 200
@@ -20,6 +23,8 @@ _files = {}
 _totals = None
 _commits = None
 _repos = None
+_activity = None
+_active = None
 
 
 def find_repos(root):
@@ -87,7 +92,7 @@ def count_total_commits(repos):
             expanded.extend(_repos[1])
 
     key = tuple(sorted(str(p) for p in expanded))
-    if _commits and _commits[1] == key and now - _commits[0] < TTL:
+    if _commits and _commits[1] == key and now - _commits[0] < COMMIT_TTL:
         return _commits[2]
 
     total = sum(_git_count(r) for r in expanded)
@@ -96,16 +101,21 @@ def count_total_commits(repos):
 
 
 def last_activity(root=CLAUDE_DIR):
+    global _activity
+    now = time.time()
+    if _activity and now - _activity[0] < ACTIVITY_TTL:
+        return _activity[1]
+
     newest = 0
-    if not root.exists():
-        return 0
-    for path in root.rglob("*.jsonl"):
-        try:
-            m = path.stat().st_mtime
-        except OSError:
-            continue
-        if m > newest:
-            newest = m
+    if root.exists():
+        for path in root.rglob("*.jsonl"):
+            try:
+                m = path.stat().st_mtime
+            except OSError:
+                continue
+            if m > newest:
+                newest = m
+    _activity = (now, newest)
     return newest
 
 
@@ -137,12 +147,14 @@ def claude_usage_totals(root=CLAUDE_DIR):
         return _totals[1], _totals[2]
 
     m_total = t_total = 0
+    seen = set()
     if root.exists():
         for path in root.rglob("*.jsonl"):
             try:
                 st = path.stat()
             except OSError:
                 continue
+            seen.add(path)
             key = (st.st_mtime, st.st_size)
             cached = _files.get(path)
             if cached and cached[:2] == key:
@@ -152,6 +164,10 @@ def claude_usage_totals(root=CLAUDE_DIR):
                 _files[path] = (*key, m, t)
             m_total += m
             t_total += t
+
+    # forget files that disappeared so the cache cant grow forever
+    for stale in set(_files) - seen:
+        del _files[stale]
 
     _totals = (now, m_total, t_total)
     return m_total, t_total
@@ -270,10 +286,7 @@ _TERMINAL_EXES = {
 }
 
 
-def claude_active():
-    if os.name != "nt":
-        return True
-
+def _scan_claude_active():
     visible = set()
 
     def cb(hwnd, _lp):
@@ -308,3 +321,15 @@ def claude_active():
                 return True
             cur = parent
     return False
+
+
+def claude_active():
+    global _active
+    if os.name != "nt":
+        return True
+    now = time.time()
+    if _active and now - _active[0] < ACTIVE_TTL:
+        return _active[1]
+    result = _scan_claude_active()
+    _active = (now, result)
+    return result

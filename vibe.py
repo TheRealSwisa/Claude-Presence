@@ -1,5 +1,7 @@
+import atexit
 import os
 import random
+import signal
 import sys
 import time
 import traceback
@@ -19,6 +21,8 @@ load_dotenv(ROOT / ".env")
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "").strip()
 LOGO = os.getenv("LARGE_IMAGE_KEY", "logo").strip()
 ERROR_LOG = ROOT / "data" / "error.log"
+ERROR_LOG_CAP = 256 * 1024
+STOP_FILE = ROOT / "data" / "stop"
 
 _paths = [p.strip() for p in os.getenv("REPO_PATHS", "").split(",") if p.strip()]
 REPOS = _paths or [os.getenv("REPO_ROOT", "~").strip() or "~"]
@@ -30,9 +34,10 @@ def _env_int(key, default, floor):
     except ValueError:
         return default
 
-TICK = _env_int("UPDATE_INTERVAL", 10, 5)
+TICK = _env_int("UPDATE_INTERVAL", 15, 5)
 IDLE_AFTER = _env_int("IDLE_SECONDS", 300, 30)
 VIBE_ROTATION = _env_int("VIBE_ROTATION", 120, TICK)
+CONNECT_DEADLINE = 60
 
 POOL_VERBS = {
     "working": "Coding",
@@ -49,6 +54,9 @@ def log_error(where):
     # no console in pythonw, log crashes to file
     try:
         ERROR_LOG.parent.mkdir(exist_ok=True)
+        if ERROR_LOG.exists() and ERROR_LOG.stat().st_size > ERROR_LOG_CAP:
+            tail = ERROR_LOG.read_bytes()[-ERROR_LOG_CAP // 2:]
+            ERROR_LOG.write_bytes(tail)
         with ERROR_LOG.open("a", encoding="utf-8") as f:
             f.write(f"\n{time.strftime('%Y-%m-%d %H:%M:%S')} [{where}]\n")
             f.write(traceback.format_exc())
@@ -60,6 +68,17 @@ def connect():
     rpc = Presence(CLIENT_ID)
     rpc.connect()
     return rpc
+
+
+def connect_retry(deadline):
+    # discord may not be up yet at login
+    while True:
+        try:
+            return connect()
+        except (DiscordNotFound, InvalidPipe):
+            if time.time() >= deadline:
+                raise
+            time.sleep(5)
 
 
 def rotate_if_due(now):
@@ -124,10 +143,43 @@ def main():
     if not CLIENT_ID:
         sys.exit("missing DISCORD_CLIENT_ID in .env")
 
+    rpc = None
+
+    def cleanup():
+        nonlocal rpc
+        if rpc is None:
+            return
+        try:
+            rpc.clear()
+        except Exception:
+            pass
+        try:
+            rpc.close()
+        except Exception:
+            pass
+        rpc = None
+
+    def on_signal(_signum, _frame):
+        cleanup()
+        sys.exit(0)
+
+    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, on_signal)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, on_signal)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, on_signal)
+
     try:
-        rpc = connect()
+        rpc = connect_retry(time.time() + CONNECT_DEADLINE)
     except (DiscordNotFound, InvalidPipe) as e:
         sys.exit(f"could not reach discord: {e}")
+
+    # wipe stale activity from a prior run
+    try:
+        rpc.clear()
+    except Exception:
+        pass
 
     started = None
     last = "idle"
@@ -135,8 +187,18 @@ def main():
 
     while True:
         try:
+            if STOP_FILE.exists():
+                try:
+                    STOP_FILE.unlink()
+                except OSError:
+                    pass
+                break
             last, started = tick(rpc, started, last)
-            time.sleep(TICK)
+            # short sleeps so stop.bat can interrupt fast
+            for _ in range(TICK):
+                if STOP_FILE.exists():
+                    break
+                time.sleep(1)
         except KeyboardInterrupt:
             print()
             break
@@ -144,16 +206,14 @@ def main():
             time.sleep(TICK)
             try:
                 rpc = connect()
+                rpc.clear()
+                started = None
+                last = "idle"
             except (DiscordNotFound, InvalidPipe):
                 pass
         except Exception:
             log_error("tick")
             time.sleep(TICK)
-
-    try:
-        rpc.close()
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":
